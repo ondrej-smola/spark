@@ -271,10 +271,8 @@ private[spark] class CoarseMesosSchedulerBackend(
             .addAllResources(cpuResourcesToUse.asJava)
             .addAllResources(memResourcesToUse.asJava)
 
-          sc.conf.getOption("spark.mesos.executor.docker.image").foreach { image =>
-            MesosSchedulerBackendUtil
-              .setupContainerBuilderDockerInfo(image, sc.conf, taskBuilder.getContainerBuilder())
-          }
+            MesosSchedulerBackendUtil.setupDockerContainerBuilderFromConfiguration(taskBuilder.getContainerBuilder, sc.conf.getAll.toMap)
+              .foreach(taskBuilder.setContainer)
 
           // accept the offer and launch the task
           logDebug(s"Accepting offer: $id with attributes: $offerAttributes mem: $mem cpu: $cpus")

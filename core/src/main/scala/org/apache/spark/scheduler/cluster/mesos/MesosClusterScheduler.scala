@@ -485,18 +485,10 @@ private[spark] class MesosClusterScheduler(
           .setCommand(commandInfo)
           .addResources(cpuResource)
           .addResources(memResource)
-        submission.schedulerProperties.get("spark.mesos.executor.docker.image").foreach { image =>
-          val container = taskInfo.getContainerBuilder()
-          val volumes = submission.schedulerProperties
-            .get("spark.mesos.executor.docker.volumes")
-            .map(MesosSchedulerBackendUtil.parseVolumesSpec)
-          val portmaps = submission.schedulerProperties
-            .get("spark.mesos.executor.docker.portmaps")
-            .map(MesosSchedulerBackendUtil.parsePortMappingsSpec)
-          MesosSchedulerBackendUtil.addDockerInfo(
-            container, image, volumes = volumes, portmaps = portmaps)
-          taskInfo.setContainer(container.build())
-        }
+
+        MesosSchedulerBackendUtil.setupDockerContainerBuilderFromConfiguration(taskInfo.getContainerBuilder,conf.getAll.toMap)
+          .foreach(taskInfo.setContainer)
+
         val queuedTasks = tasks.getOrElseUpdate(offer.offer.getId, new ArrayBuffer[TaskInfo])
         queuedTasks += taskInfo.build()
         logTrace(s"Using offer ${offer.offer.getId.getValue} to launch driver " +
