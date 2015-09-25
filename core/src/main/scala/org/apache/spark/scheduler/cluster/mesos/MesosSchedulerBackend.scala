@@ -140,12 +140,8 @@ private[spark] class MesosSchedulerBackend(
       .setCommand(command)
       .setData(ByteString.copyFrom(createExecArg()))
 
-
     MesosSchedulerBackendUtil
-      .setupDockerContainerBuilderFromConfiguration(executorInfo.getContainerBuilder, sc.conf.getAll.toMap)
-      .foreach(executorInfo.setContainer)
-
-
+      .trySetupDockerContainer(executorInfo, sc.conf.getAll.toMap)
 
     (executorInfo.build(), resourcesAfterMem.asJava)
   }

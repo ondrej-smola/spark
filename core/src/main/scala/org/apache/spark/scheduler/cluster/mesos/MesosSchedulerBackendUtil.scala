@@ -17,13 +17,10 @@
 
 package org.apache.spark.scheduler.cluster.mesos
 
-import com.fasterxml.jackson.databind.util.ContainerBuilder
-import org.apache.mesos.Protos
-import org.apache.mesos.Protos.ContainerInfo.DockerInfo.Network
-import org.apache.mesos.Protos.{Parameter, ContainerInfo, Volume}
 import org.apache.mesos.Protos.ContainerInfo.DockerInfo
-
-import org.apache.spark.{Logging, SparkConf}
+import org.apache.mesos.Protos.ContainerInfo.DockerInfo.Network
+import org.apache.mesos.Protos.{ContainerInfo, ExecutorInfo, Parameter, TaskInfo, Volume}
+import org.apache.spark.Logging
 
 /**
  * A collection of utility functions which can be used by both the
@@ -34,11 +31,11 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
    * Parse a comma-delimited list of volume specs, each of which
    * takes the form [host-dir:]container-dir[:rw|:ro].
    */
-  def parseVolumesSpec(volumes: String): List[Volume] = {
+  def parseVolumesSpec(volumes: String): Iterable[Volume] = {
     volumes.split(",").map(_.split(":")).flatMap { spec =>
       val vol: Volume.Builder = Volume
-        .newBuilder()
-        .setMode(Volume.Mode.RW)
+          .newBuilder()
+          .setMode(Volume.Mode.RW)
       spec match {
         case Array(container_path) =>
           Some(vol.setContainerPath(container_path))
@@ -46,28 +43,25 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
           Some(vol.setContainerPath(container_path))
         case Array(container_path, "ro") =>
           Some(vol.setContainerPath(container_path)
-            .setMode(Volume.Mode.RO))
+              .setMode(Volume.Mode.RO))
         case Array(host_path, container_path) =>
           Some(vol.setContainerPath(container_path)
-            .setHostPath(host_path))
+              .setHostPath(host_path))
         case Array(host_path, container_path, "rw") =>
           Some(vol.setContainerPath(container_path)
-            .setHostPath(host_path))
+              .setHostPath(host_path))
         case Array(host_path, container_path, "ro") =>
           Some(vol.setContainerPath(container_path)
-            .setHostPath(host_path)
-            .setMode(Volume.Mode.RO))
-        case _ => {
+              .setHostPath(host_path)
+              .setMode(Volume.Mode.RO))
+        case _ =>
           logWarning(s"Unable to parse volume specs: $volumes. "
-            + "Expected form: \"[host-dir:]container-dir[:rw|:ro](, ...)\"")
+              + "Expected form: \"[host-dir:]container-dir[:rw|:ro](, ...)\"")
           None
-        }
       }
-    }
-      .map {
+    }.map {
       _.build()
     }
-      .toList
   }
 
   /**
@@ -81,30 +75,27 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
    * anticipates the expansion of the docker form to allow for a protocol
    * and leaves open the chance for mesos to begin to accept an 'ip' field
    */
-  def parsePortMappingsSpec(portmaps: String): List[DockerInfo.PortMapping] = {
+  def parsePortMappingsSpec(portmaps: String): Iterable[DockerInfo.PortMapping] = {
     portmaps.split(",").map(_.split(":")).flatMap { spec: Array[String] =>
       val portmap: DockerInfo.PortMapping.Builder = DockerInfo.PortMapping
-        .newBuilder()
-        .setProtocol("tcp")
+          .newBuilder()
+          .setProtocol("tcp")
       spec match {
         case Array(host_port, container_port) =>
           Some(portmap.setHostPort(host_port.toInt)
-            .setContainerPort(container_port.toInt))
+              .setContainerPort(container_port.toInt))
         case Array(host_port, container_port, protocol) =>
           Some(portmap.setHostPort(host_port.toInt)
-            .setContainerPort(container_port.toInt)
-            .setProtocol(protocol))
-        case spec => {
+              .setContainerPort(container_port.toInt)
+              .setProtocol(protocol))
+        case _ =>
           logWarning(s"Unable to parse port mapping specs: $portmaps. "
-            + "Expected form: \"host_port:container_port[:udp|:tcp](, ...)\"")
+              + "Expected form: \"host_port:container_port[:udp|:tcp](, ...)\"")
           None
-        }
       }
-    }
-      .map {
+    }.map {
       _.build()
     }
-      .toList
   }
 
   /**
@@ -112,65 +103,99 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
    */
   def parseNetworkTypeSpec(netType: String): Option[ContainerInfo.DockerInfo.Network] = {
     netType match {
-      case "HOST" => Some(Network.HOST)
-      case "BRIDGE" => Some(Network.BRIDGE)
-      case "NONE" => Some(Network.NONE)
+      case "host" => Some(Network.HOST)
+      case "bridge" => Some(Network.BRIDGE)
+      case "none" => Some(Network.NONE)
       case _ =>
-        logWarning(s"Unable to parse network type specs: $netType. Expected \"HOST\", \"BRIDGE\" or \"NONE\"")
+        logWarning(s"Unable to parse network type specs: $netType." +
+            "Expected one of \"host\", \"bridge\" or \"none\"")
         None
     }
   }
 
 
   /**
-   * Returns all properties starting with spark.mesos.executor.docker.parameter as Parameter instance
+   * Returns all properties starting with spark.mesos.executor.docker.parameter and
+   * spark.mesos.executor.docker.parameters. as Parameter list
    *
    * @param configuration Where to search
    * @return Found occurrences
    */
-  def listAdditionalExecutorParameters(configuration: Map[String, String]): List[Parameter] = {
-    configuration.filter(_._1.startsWith("spark.mesos.executor.docker.parameter."))
-      .map(_._1.stripPrefix("spark.mesos.executor.docker.parameter."))
-      .map { case (k, v) => Parameter.newBuilder().setKey(k).setValue(v).build() } toList
+  def listAdditionalExecutorParameters(configuration: Iterable[(String, String)]): Iterable[Parameter] = {
+     val singleParams = configuration.filter(_._1.startsWith("spark.mesos.executor.docker.parameter."))
+        .map(t => (t._1.stripPrefix("spark.mesos.executor.docker.parameter."), t._2))
+        .filter(_._1.nonEmpty)
+
+    val multiParams = configuration.filter(_._1.startsWith("spark.mesos.executor.docker.parameters."))
+        .flatMap { case (k, v) =>
+      val key = k.stripPrefix("spark.mesos.executor.docker.parameters.")
+      v.split(",").map( e => (key, e.trim)).filter(_._2.nonEmpty)
+    }
+
+    (multiParams ++ singleParams).map { case (k, v) => Parameter.newBuilder().setKey(k).setValue(v).build() }
   }
 
 
   /**
-   * Configure provided container builder to represent docker container with image, network, port mappings, volumes and
+   * Configure docker container with image, network, port mappings, volumes and
    * docker cli parameters. All configuration is read from provided configuration source and uses protobuf default value
-   * when optional section is missing. Configuration only takes place when docker image configuration property is found,
-   * otherwise it does nothing and None is returned
-   * 
-   * @param builder Container builder to configure
-   * @param configuration Property container
-   * @return Configured ContainerInfo.Builder when configuration contains docker image name property or None when
-   *         section is missing or does not contain docker image name
-   */
-  def setupDockerContainerBuilderFromConfiguration(
-                                builder: ContainerInfo.Builder,
-                                configuration: Map[String, String]): Option[ContainerInfo.Builder] = {
-
-    configuration.get("spark.mesos.executor.docker.image") match {          
+   * when optional section is missing. Configuration is done only when docker image configuration property is found,
+   * otherwise it does not modify provided executorInfo
+   **/
+  def trySetupDockerContainer(
+      executorInfo: ExecutorInfo.Builder,
+      configuration: Map[String, String]): Unit = {
+    findDockerContainerImageName(configuration) match {
       case Some(imageName) =>
-        builder.setType(ContainerInfo.Type.DOCKER)
-
-        val network = configuration.get("spark.mesos.executor.docker.network").flatMap(parseNetworkTypeSpec)
-        val portmaps = configuration.get("spark.mesos.executor.docker.portmaps").map(parsePortMappingsSpec)
-        val volumes = configuration.get("spark.mesos.executor.docker.volumes").map(parseVolumesSpec)
-        val additionalParameters = listAdditionalExecutorParameters(configuration)
-
-        val docker = ContainerInfo.DockerInfo.newBuilder().setImage(imageName)
-
-        network.foreach(docker.setNetwork)
-        portmaps.foreach(_.foreach(docker.addPortMappings))
-        volumes.foreach(_.foreach(builder.addVolumes))
-        additionalParameters.foreach(docker.addParameters)
-
-        builder.setDocker(docker.build())
-
-        logDebug("Container builder configured for docker image " + imageName)
-        Some(builder)
-      case None => None
+        val builder = executorInfo.getContainerBuilder
+        setupDockerContainerBuilder(imageName, builder, configuration)
+        executorInfo.setContainer(builder.build())
+      case _ =>
     }
+  }
+
+  /**
+   * Configure docker container with image, network, port mappings, volumes and
+   * docker cli parameters. All configuration is read from provided configuration source and uses protobuf default value
+   * when optional section is missing. Configuration is done only when docker image configuration property is found,
+   * otherwise it does not modify provided executorInfo
+   **/
+  def trySetupDockerContainer(
+      taskInfo: TaskInfo.Builder,
+      configuration: Map[String, String]): Unit = {
+    findDockerContainerImageName(configuration) match {
+      case Some(imageName) =>
+        val builder = taskInfo.getContainerBuilder
+        setupDockerContainerBuilder(imageName, builder, configuration)
+        taskInfo.setContainer(builder.build())
+      case _ =>
+    }
+  }
+
+  def findDockerContainerImageName(configuration: Map[String, String]): Option[String] = {
+    configuration.get("spark.mesos.executor.docker.image")
+  }
+
+  def setupDockerContainerBuilder(
+      imageName: String,
+      builder: ContainerInfo.Builder,
+      configuration: Map[String, String]): Unit = {
+
+    builder.setType(ContainerInfo.Type.DOCKER)
+    val network = configuration.get("spark.mesos.executor.docker.network").flatMap(parseNetworkTypeSpec)
+    val portmaps = configuration.get("spark.mesos.executor.docker.portmaps").map(parsePortMappingsSpec)
+    val volumes = configuration.get("spark.mesos.executor.docker.volumes").map(parseVolumesSpec)
+    val additionalParameters = listAdditionalExecutorParameters(configuration)
+
+    val docker = ContainerInfo.DockerInfo.newBuilder().setImage(imageName)
+
+    network.foreach(docker.setNetwork)
+    portmaps.foreach(_.foreach(docker.addPortMappings))
+    volumes.foreach(_.foreach(builder.addVolumes))
+    additionalParameters.foreach(docker.addParameters)
+
+    builder.setDocker(docker.build())
+
+    logDebug("Configured docker container for docker image " + imageName)
   }
 }

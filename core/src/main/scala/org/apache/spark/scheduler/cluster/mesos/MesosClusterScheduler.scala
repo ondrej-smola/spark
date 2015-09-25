@@ -486,8 +486,7 @@ private[spark] class MesosClusterScheduler(
           .addResources(cpuResource)
           .addResources(memResource)
 
-        MesosSchedulerBackendUtil.setupDockerContainerBuilderFromConfiguration(taskInfo.getContainerBuilder,conf.getAll.toMap)
-          .foreach(taskInfo.setContainer)
+        MesosSchedulerBackendUtil.trySetupDockerContainer(taskInfo,conf.getAll.toMap)
 
         val queuedTasks = tasks.getOrElseUpdate(offer.offer.getId, new ArrayBuffer[TaskInfo])
         queuedTasks += taskInfo.build()

@@ -116,6 +116,8 @@ class MesosSchedulerBackendSuite extends SparkFunSuite with LocalSparkContext wi
       .set("spark.mesos.executor.docker.image", "spark/mock")
       .set("spark.mesos.executor.docker.volumes", "/a,/b:/b,/c:/c:rw,/d:ro,/e:/e:ro")
       .set("spark.mesos.executor.docker.portmaps", "80:8080,53:53:tcp")
+      .set("spark.mesos.executor.docker.parameters.env", "FOO=bar, BAZ=quux, ")
+      .set("spark.mesos.executor.docker.parameter.test", "test")
 
     val listenerBus = mock[LiveListenerBus]
     listenerBus.post(
@@ -154,6 +156,12 @@ class MesosSchedulerBackendSuite extends SparkFunSuite with LocalSparkContext wi
     assert(volumes.get(4).getContainerPath.equals("/e"))
     assert(volumes.get(4).getHostPath.equals("/e"))
     assert(volumes.get(4).getMode.equals(Volume.Mode.RO))
+
+    val parameters = execInfo.getContainer.getDocker.getParametersList.asScala
+
+    assert(parameters.exists( p => p.getKey.equals("env") && p.getValue.equals("FOO=bar") ))
+    assert(parameters.exists( p => p.getKey.equals("env") && p.getValue.equals("BAZ=quux") ))
+    assert(parameters.exists( p => p.getKey.equals("test") && p.getValue.equals("test") ))
   }
 
   test("mesos resource offers result in launching tasks") {
