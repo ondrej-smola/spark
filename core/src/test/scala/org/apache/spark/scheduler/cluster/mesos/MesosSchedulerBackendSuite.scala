@@ -22,6 +22,8 @@ import java.util.Arrays
 import java.util.Collection
 import java.util.Collections
 
+import org.apache.mesos.Protos.ContainerInfo.DockerInfo
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -116,6 +118,7 @@ class MesosSchedulerBackendSuite extends SparkFunSuite with LocalSparkContext wi
       .set("spark.mesos.executor.docker.image", "spark/mock")
       .set("spark.mesos.executor.docker.volumes", "/a,/b:/b,/c:/c:rw,/d:ro,/e:/e:ro")
       .set("spark.mesos.executor.docker.portmaps", "80:8080,53:53:tcp")
+      .set("spark.mesos.executor.docker.network", "host")
       .set("spark.mesos.executor.docker.parameters.env", "FOO=bar, BAZ=quux, ")
       .set("spark.mesos.executor.docker.parameter.test", "test")
 
@@ -134,6 +137,7 @@ class MesosSchedulerBackendSuite extends SparkFunSuite with LocalSparkContext wi
 
     val (execInfo, _) = backend.createExecutorInfo(
       Arrays.asList(backend.createResource("cpus", 4)), "mockExecutor")
+    assert(execInfo.getContainer.getDocker.getNetwork.equals(DockerInfo.Network.HOST))
     assert(execInfo.getContainer.getDocker.getImage.equals("spark/mock"))
     val portmaps = execInfo.getContainer.getDocker.getPortMappingsList
     assert(portmaps.get(0).getHostPort.equals(80))
@@ -159,6 +163,7 @@ class MesosSchedulerBackendSuite extends SparkFunSuite with LocalSparkContext wi
 
     val parameters = execInfo.getContainer.getDocker.getParametersList.asScala
 
+    assert(parameters.size.equals(3))
     assert(parameters.exists( p => p.getKey.equals("env") && p.getValue.equals("FOO=bar") ))
     assert(parameters.exists( p => p.getKey.equals("env") && p.getValue.equals("BAZ=quux") ))
     assert(parameters.exists( p => p.getKey.equals("test") && p.getValue.equals("test") ))

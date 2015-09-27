@@ -124,7 +124,6 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
   def listAdditionalExecutorParameters(configuration: Iterable[(String, String)]): Iterable[Parameter] = {
      val singleParams = configuration.filter(_._1.startsWith("spark.mesos.executor.docker.parameter."))
         .map(t => (t._1.stripPrefix("spark.mesos.executor.docker.parameter."), t._2))
-        .filter(_._1.nonEmpty)
 
     val multiParams = configuration.filter(_._1.startsWith("spark.mesos.executor.docker.parameters."))
         .flatMap { case (k, v) =>
@@ -132,7 +131,7 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
       v.split(",").map( e => (key, e.trim)).filter(_._2.nonEmpty)
     }
 
-    (multiParams ++ singleParams).map { case (k, v) => Parameter.newBuilder().setKey(k).setValue(v).build() }
+    (multiParams ++ singleParams).filter(_._1.nonEmpty).map { case (k, v) => Parameter.newBuilder().setKey(k).setValue(v).build() }
   }
 
 

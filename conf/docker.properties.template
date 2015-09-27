@@ -15,6 +15,22 @@
 # limitations under the License.
 #
 
+
 spark.mesos.executor.docker.image: <image built from `../docker/spark-mesos/Dockerfile`>
 spark.mesos.executor.docker.volumes: /usr/local/lib:/host/usr/local/lib:ro
+
+# supported values are "host", "none" and "bridge" (default)
+spark.mesos.executor.docker.network: bridge
+spark.mesos.executor.docker.portmap: 80:8080,53:53:tcp
+
+
+# passing custom docker parameters - only long names are supported
+# single value
+spark.mesos.executor.docker.parameter.memory-swappiness: 0
+
+# multiple comma separated values
+# LIMITATION values cannot contain comma character
+spark.mesos.executor.docker.parameters.env:  FOO=BAR, ENV1=VAL1
+
+
 spark.mesos.executor.home: /opt/spark
