@@ -272,7 +272,6 @@ private[spark] class CoarseMesosSchedulerBackend(
             .addAllResources(memResourcesToUse.asJava)
 
           MesosSchedulerBackendUtil.trySetupDockerContainer(taskBuilder, sc.conf.getAll.toMap)
-
           // accept the offer and launch the task
           logDebug(s"Accepting offer: $id with attributes: $offerAttributes mem: $mem cpu: $cpus")
           slaveIdToHost(offer.getSlaveId.getValue) = offer.getHostname
