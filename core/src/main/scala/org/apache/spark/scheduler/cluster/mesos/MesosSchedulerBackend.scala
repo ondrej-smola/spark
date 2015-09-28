@@ -82,8 +82,8 @@ private[spark] class MesosSchedulerBackend(
       availableResources: JList[Resource],
       execId: String): (MesosExecutorInfo, JList[Resource]) = {
     val executorSparkHome = sc.conf.getOption("spark.mesos.executor.home")
-        .orElse(sc.getSparkHome()) // Fall back to driver Spark home for backward compatibility
-        .getOrElse {
+      .orElse(sc.getSparkHome()) // Fall back to driver Spark home for backward compatibility
+      .getOrElse {
       throw new SparkException("Executor Spark home `spark.mesos.executor.home` is not set!")
     }
     val environment = Environment.newBuilder()
@@ -222,7 +222,7 @@ private[spark] class MesosSchedulerBackend(
 
         val meetsRequirements =
           (meetsConstraints && meetsMemoryRequirements && meetsCPURequirements) ||
-            (slaveIdToExecutorInfo.contains(slaveId) && cpus >= scheduler.CPUS_PER_TASK)
+          (slaveIdToExecutorInfo.contains(slaveId) && cpus >= scheduler.CPUS_PER_TASK)
 
         // add some debug messaging
         val debugstr = if (meetsRequirements) "Accepting" else "Declining"
@@ -386,7 +386,7 @@ private[spark] class MesosSchedulerBackend(
   override def executorLost(d: SchedulerDriver, executorId: ExecutorID,
                             slaveId: SlaveID, status: Int) {
     logInfo("Executor lost: %s, marking slave %s as lost".format(executorId.getValue,
-      slaveId.getValue))
+                                                                 slaveId.getValue))
     recordSlaveLost(d, slaveId, ExecutorExited(status, isNormalExit = false))
   }
 
